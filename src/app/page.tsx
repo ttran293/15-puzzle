@@ -5,17 +5,16 @@ const COLS = 3;
 const ROWS = 6;
 const TOTAL_POSITIONS = COLS * ROWS;
 
-// Hook to get responsive tile size
 const useTileSize = () => {
   const [tileSize, setTileSize] = useState(128);
 
   useEffect(() => {
     const calculateSize = () => {
       const screenWidth = window.innerWidth;
-      const padding = 48; // Account for container padding
-      const maxWidth = Math.min(screenWidth - padding, 450); // Max puzzle width
+      const padding = 48; 
+      const maxWidth = Math.min(screenWidth - padding, 450); 
       const size = Math.floor(maxWidth / COLS);
-      setTileSize(Math.min(size, 128)); // Cap at 128px
+      setTileSize(Math.min(size, 128));
     };
 
     calculateSize();
@@ -121,38 +120,60 @@ const getPlayableTiles = (state: number[]): number[] => {
   return PLAYABLE_POSITIONS.map(pos => state[pos]);
 };
 
-const countInversions = (tiles: number[]) => {
-  let inversions = 0;
-  const filtered = tiles.filter(t => t !== EMPTY);
-  for (let i = 0; i < filtered.length - 1; i++) {
-    for (let j = i + 1; j < filtered.length; j++) {
-      if (filtered[i] > filtered[j]) {
-        inversions++;
+const getValidMoves = (state: number[], emptyPos: number): number[] => {
+  const moves: number[] = [];
+  const row = Math.floor(emptyPos / COLS);
+  const col = emptyPos % COLS;
+  
+  // Check all 4 directions
+  const directions = [
+    { dr: -1, dc: 0 }, // up
+    { dr: 1, dc: 0 },  // down
+    { dr: 0, dc: -1 }, // left
+    { dr: 0, dc: 1 },  // right
+  ];
+  
+  for (const { dr, dc } of directions) {
+    const newRow = row + dr;
+    const newCol = col + dc;
+    
+    if (newRow >= 0 && newRow < ROWS && newCol >= 0 && newCol < COLS) {
+      const newPos = newRow * COLS + newCol;
+      if (!BLOCKED_POSITIONS.includes(newPos)) {
+        moves.push(newPos);
       }
     }
   }
-  return inversions;
-};
-
-const isSolvable = (state: number[]) => {
-  const playable = getPlayableTiles(state);
-  const inversions = countInversions(playable);
-  return inversions % 2 === 0;
+  
+  return moves;
 };
 
 const shuffleTiles = (): number[] => {
   let state: number[];
+  let attempts = 0;
+  const maxAttempts = 1000;
+  
   do {
     state = generateSolvedState();
-    const playableValues = PLAYABLE_POSITIONS.map(pos => state[pos]);
-    for (let i = playableValues.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [playableValues[i], playableValues[j]] = [playableValues[j], playableValues[i]];
+    const numMoves = 100 + Math.floor(Math.random() * 200); 
+    
+    for (let i = 0; i < numMoves; i++) {
+      const emptyPos = state.indexOf(EMPTY);
+      const validMoves = getValidMoves(state, emptyPos);
+      
+      if (validMoves.length > 0) {
+        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+        [state[emptyPos], state[randomMove]] = [state[randomMove], state[emptyPos]];
+      }
     }
-    PLAYABLE_POSITIONS.forEach((pos, idx) => {
-      state[pos] = playableValues[idx];
-    });
-  } while (!isSolvable(state) || JSON.stringify(getPlayableTiles(state)) === JSON.stringify(getPlayableTiles(generateSolvedState())));
+    
+    attempts++;
+    if (attempts >= maxAttempts) {
+      console.warn("Max shuffle attempts reached, using current state");
+      break;
+    }
+  } while (JSON.stringify(getPlayableTiles(state)) === JSON.stringify(getPlayableTiles(generateSolvedState())));
+  
   return state;
 };
 
