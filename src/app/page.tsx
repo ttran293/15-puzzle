@@ -150,7 +150,7 @@ const getTileStyle = (tileNum: number, imageSrc: string): React.CSSProperties =>
 export default function SlidingPuzzle() {
   const [tiles, setTiles] = useState<number[]>(generateSolvedState());
   const [moves, setMoves] = useState(0);
-  const [isWon, setIsWon] = useState(true);
+  const [isWon, setIsWon] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
   const [imageData, setImageData] = useState(IMG_LIST[0]); 
 
