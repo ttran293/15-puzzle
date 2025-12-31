@@ -99,22 +99,14 @@ const BLOCKED_POSITIONS = [1, 2];
 const PLAYABLE_POSITIONS = Array.from({ length: TOTAL_POSITIONS }, (_, i) => i)
   .filter(i => !BLOCKED_POSITIONS.includes(i));
 
-
-
-const generateSolvedState = (): number[] => {
-  const state: number[] = [];
-  let tileNum = 1;
-  for (let i = 0; i < TOTAL_POSITIONS; i++) {
-    if (i === 0) {
-      state.push(EMPTY);
-    } else if (BLOCKED_POSITIONS.includes(i)) {
-      state.push(BLOCKED);
-    } else {
-      state.push(tileNum++);
-    }
-  }
-  return state;
-};
+const SOLVED_STATE: number[] = [
+  EMPTY, BLOCKED, BLOCKED, // Row 1: Position 0, 1, 2
+  1, 2, 3,                 // Row 2
+  4, 5, 6,                 // Row 3
+  7, 8, 9,                 // Row 4
+  10, 11, 12,              // Row 5
+  13, 14, 15               // Row 6
+];
 
 const getPlayableTiles = (state: number[]): number[] => {
   return PLAYABLE_POSITIONS.map(pos => state[pos]);
@@ -154,7 +146,7 @@ const shuffleTiles = (): number[] => {
   const maxAttempts = 1000;
   
   do {
-    state = generateSolvedState();
+    state = [...SOLVED_STATE];
     const numMoves = 100 + Math.floor(Math.random() * 200); 
     
     for (let i = 0; i < numMoves; i++) {
@@ -172,7 +164,7 @@ const shuffleTiles = (): number[] => {
       console.warn("Max shuffle attempts reached, using current state");
       break;
     }
-  } while (JSON.stringify(getPlayableTiles(state)) === JSON.stringify(getPlayableTiles(generateSolvedState())));
+  } while (JSON.stringify(getPlayableTiles(state)) === JSON.stringify(getPlayableTiles(SOLVED_STATE)));
   
   return state;
 };
@@ -190,22 +182,24 @@ const getTileStyle = (tileNum: number, imageSrc: string, tileSize: number): Reac
 
 export default function SlidingPuzzle() {
   const tileSize = useTileSize();
-  const [tiles, setTiles] = useState<number[]>(generateSolvedState());
+  const [tiles, setTiles] = useState<number[]>(SOLVED_STATE);
   const [moves, setMoves] = useState(0);
   const [isWon, setIsWon] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
   const [imageData, setImageData] = useState(IMG_LIST[0]); 
-
-
-
+  const [moveSound, setMoveSound] = useState<HTMLAudioElement | null>(null);
+  const [winSound, setWinSound] = useState<HTMLAudioElement | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
     setImageData(IMG_LIST[Math.floor(Math.random() * IMG_LIST.length)]);
+    setMoveSound(new Audio('/sound/mixkit-twig-breaking-2945.wav'));
+    setWinSound(new Audio("/sound/mixkit-achievement-bell-600.wav"));
   }, []);
 
   const checkWin = useCallback((currentTiles: number[]) => {
     const current = getPlayableTiles(currentTiles);
-    const solved = getPlayableTiles(generateSolvedState());
+    const solved = getPlayableTiles(SOLVED_STATE);
     return JSON.stringify(current) === JSON.stringify(solved);
   }, []);
 
@@ -230,21 +224,56 @@ export default function SlidingPuzzle() {
       setTiles(newTiles);
       setMoves((m) => m + 1);
 
+      if (moveSound) {
+        moveSound.currentTime = 0;
+        moveSound.play().catch(() => {
+        });
+      }
+
       if (checkWin(newTiles)) {
         setIsWon(true);
+        if (winSound) {
+          winSound.currentTime = 0;
+          winSound.play().catch(() => {
+          });
+        }
+        
+        setTimeout(() => {
+          setIsTransitioning(true);
+        }, 3000);
+        
+        setTimeout(() => {
+          setImageData(IMG_LIST[Math.floor(Math.random() * IMG_LIST.length)]);
+          setTiles(shuffleTiles());
+          setMoves(0);
+          setIsWon(false);
+          setIsShuffled(true);
+        }, 4000);
+        
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 4100);
       }
     }
   };
 
   const handleShuffle = () => {
-    setTiles(shuffleTiles());
-    setMoves(0);
-    setIsWon(false);
-    setIsShuffled(true);
+    setIsTransitioning(true);
+    
+    setTimeout(() => {
+      setTiles(shuffleTiles());
+      setMoves(0);
+      setIsWon(false);
+      setIsShuffled(true);
+    }, 500);
+    
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 600);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-3 sm:p-4 bg-white">
+    <div className="min-h-screen flex flex-col items-center justify-center p-3 sm:p-4 bg-white">
       <div
         className={`
           relative p-4 sm:p-6 bg-[#e6e2dc] ring-1 ring-black/15 rounded-lg
@@ -256,9 +285,9 @@ export default function SlidingPuzzle() {
           ]
         `}
       >
-        <div className="flex justify-between items-start mb-3 sm:mb-4 gap-3">
+        <div className={`flex justify-between items-start mb-3 sm:mb-4 gap-3 transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           <div className="flex-1 min-w-0">
-            <h2 
+            <h2
               className="text-base sm:text-xl font-semibold text-stone-700 leading-tight"
               style={{ maxWidth: tileSize * 2.2 }}
             >
@@ -282,7 +311,7 @@ export default function SlidingPuzzle() {
           </div>
         </div>
 
-        <div className="relative">
+        <div className={`relative transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           <div className="grid grid-cols-3 gap-0">
             {tiles.map((tile, index) => {
               const isBlocked = BLOCKED_POSITIONS.includes(index);
@@ -312,7 +341,9 @@ export default function SlidingPuzzle() {
                   style={{
                     width: tileSize,
                     height: tileSize,
-                    ...(!isEmpty ? getTileStyle(tile, imageData.src, tileSize) : {}),
+                    ...(!isEmpty
+                      ? getTileStyle(tile, imageData.src, tileSize)
+                      : {}),
                   }}
                 />
               );
@@ -321,31 +352,13 @@ export default function SlidingPuzzle() {
         </div>
 
         {!isShuffled && (
-          <div className="absolute inset-0 flex items-center justify-center bg-stone-200/80 rounded-lg">
+          <div className="absolute inset-0 flex items-center justify-center bg-stone-200/50 rounded-lg">
             <button
               onClick={handleShuffle}
               className="rounded-md px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium text-white bg-stone-700 hover:bg-stone-800 transition-all"
             >
               Start
             </button>
-          </div>
-        )}
-
-        {isWon && (
-          <div className="absolute inset-0 flex items-center justify-center bg-stone-200/90 rounded-lg">
-            <div className="text-center">
-              <div className="text-3xl sm:text-4xl mb-2 sm:mb-3">✓</div>
-              <h2 className="text-lg sm:text-xl font-medium text-stone-800 mb-1">
-                Congratulations!
-              </h2>
-              <p className="text-stone-500 text-xs sm:text-sm mb-3 sm:mb-4">{moves} moves</p>
-              <button
-                onClick={handleShuffle}
-                className="rounded-md px-4 sm:px-5 py-2 text-xs sm:text-sm font-medium text-white bg-stone-700 hover:bg-stone-800 transition-all"
-              >
-                Play Again
-              </button>
-            </div>
           </div>
         )}
       </div>
