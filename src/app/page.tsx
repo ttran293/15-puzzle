@@ -5,21 +5,56 @@ const COLS = 3;
 const ROWS = 6;
 const TOTAL_POSITIONS = COLS * ROWS;
 
+const calculateTileSize = (screenWidth: number, screenHeight: number) => {
+  let horizontalPadding: number;
+  let verticalPadding: number;
+  let maxSize: number;
+  
+  if (screenHeight < 700) {
+    horizontalPadding = 40;
+    verticalPadding = 200;
+    maxSize = 60;
+  } else if (screenHeight < 900) {
+    horizontalPadding = 80;
+    verticalPadding = 250;
+    maxSize = 70;
+  } else if (screenHeight < 1080) {
+    horizontalPadding = 100;
+    verticalPadding = 300;
+    maxSize = 80;
+  } else {
+    horizontalPadding = 120;
+    verticalPadding = 350;
+    maxSize = 90;
+  }
+  
+  const maxWidth = screenWidth - horizontalPadding;
+  const widthBasedSize = Math.floor(maxWidth / COLS);
+  
+  const maxHeight = screenHeight - verticalPadding;
+  const heightBasedSize = Math.floor(maxHeight / ROWS);
+  
+  const size = Math.min(widthBasedSize, heightBasedSize);
+  const finalSize = Math.max(60, Math.min(size, maxSize));
+  
+  
+  return finalSize;
+};
+
 const useTileSize = () => {
-  const [tileSize, setTileSize] = useState(128);
+  const [tileSize, setTileSize] = useState(70);
 
   useEffect(() => {
-    const calculateSize = () => {
-      const screenWidth = window.innerWidth;
-      const padding = 48; 
-      const maxWidth = Math.min(screenWidth - padding, 450); 
-      const size = Math.floor(maxWidth / COLS);
-      setTileSize(Math.min(size, 128));
+    const handleResize = () => {
+      const newSize = calculateTileSize(window.innerWidth, window.innerHeight);
+      setTileSize(newSize);
     };
 
-    calculateSize();
-    window.addEventListener("resize", calculateSize);
-    return () => window.removeEventListener("resize", calculateSize);
+    // Calculate immediately on mount (client-side only)
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   return tileSize;
@@ -273,27 +308,28 @@ export default function SlidingPuzzle() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-3 sm:p-4 bg-white">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 md:p-6 bg-white">
       <div
         className={`
-          relative p-4 sm:p-6 bg-[#e6e2dc] ring-1 ring-black/15 rounded-lg
+          relative p-3 sm:p-4 md:p-5 bg-[#e6e2dc] ring-1 ring-black/15 rounded-lg
           shadow-[0_12px_28px_rgba(0,0,0,.25)]
           [box-shadow:
             inset_0_2px_0_rgba(255,255,255,.85),
             inset_0_-6px_0_rgba(0,0,0,.18),
             0_12px_28px_rgba(0,0,0,.25)
           ]
+          w-full max-w-fit
         `}
       >
-        <div className={`flex justify-between items-start mb-3 sm:mb-4 gap-3 transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`flex justify-between items-start mb-2 sm:mb-3 md:mb-4 gap-2 sm:gap-3 transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
           <div className="flex-1 min-w-0">
             <h2
-              className="text-base sm:text-xl font-semibold text-stone-700 leading-tight"
+              className="text-sm sm:text-base md:text-lg font-semibold text-stone-700 leading-tight mb-0.5 sm:mb-1"
               style={{ maxWidth: tileSize * 2.2 }}
             >
               {imageData.name}
             </h2>
-            <span className="text-xs sm:text-sm text-stone-500">
+            <span className="text-[10px] sm:text-xs md:text-sm text-stone-500 leading-tight block">
               {imageData.description}
             </span>
           </div>
@@ -301,8 +337,8 @@ export default function SlidingPuzzle() {
             <div
               className="border border-stone-300"
               style={{
-                width: tileSize * 0.7,
-                height: tileSize * 1.12,
+                width: tileSize * 0.65,
+                height: tileSize * 1.1,
                 backgroundImage: `url(${imageData.src})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
@@ -355,7 +391,7 @@ export default function SlidingPuzzle() {
           <div className="absolute inset-0 flex items-center justify-center bg-stone-200/50 rounded-lg">
             <button
               onClick={handleShuffle}
-              className="rounded-md px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium text-white bg-stone-700 hover:bg-stone-800 transition-all"
+              className="rounded-md px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm font-medium text-white bg-stone-700 hover:bg-stone-800 transition-all"
             >
               Start
             </button>
