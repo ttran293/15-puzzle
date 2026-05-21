@@ -1,44 +1,70 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
 
-const COLS = 3;
-const ROWS = 6;
-const TOTAL_POSITIONS = COLS * ROWS;
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { ImageData } from "@/lib/images";
+import {
+  BLOCKED_POSITIONS,
+  COLS,
+  EMPTY,
+  IMAGE_COLS,
+  IMAGE_ROWS,
+  ROWS,
+} from "@/lib/puzzle";
+
+type MoveLogEntry = {
+  id: string;
+  playerName: string;
+  tileIndex: number;
+  tileNumber: number;
+  createdAt: string;
+};
+
+type PuzzleState = {
+  tiles: number[];
+  image: ImageData;
+  movesCount: number;
+  movesToday: number;
+  isWon: boolean;
+  canMove: boolean;
+  secondsUntilNextMove: number;
+  moveLog: MoveLogEntry[];
+};
+
+const PLAYER_NAME_KEY = "sliding-puzzle-player-name";
+const POLL_INTERVAL_MS = 2500;
+const SIDEBAR_WIDTH = 280;
+const COLUMN_GAP = 32;
 
 const calculateTileSize = (screenWidth: number, screenHeight: number) => {
-  let horizontalPadding: number;
+  const isWide = screenWidth >= 1024;
+  const framePadding = isWide ? 56 : 40;
+  const panelMax = 980;
+  const panelWidth = Math.min(screenWidth - 48, panelMax);
+  const puzzleAreaWidth = isWide
+    ? panelWidth - SIDEBAR_WIDTH - COLUMN_GAP - framePadding
+    : panelWidth - framePadding;
+  const widthBasedSize = Math.floor(puzzleAreaWidth / COLS);
+
   let verticalPadding: number;
   let maxSize: number;
-  
+
   if (screenHeight < 700) {
-    horizontalPadding = 40;
-    verticalPadding = 200;
-    maxSize = 60;
+    verticalPadding = isWide ? 160 : 280;
+    maxSize = 72;
   } else if (screenHeight < 900) {
-    horizontalPadding = 80;
-    verticalPadding = 250;
-    maxSize = 70;
+    verticalPadding = isWide ? 180 : 300;
+    maxSize = 88;
   } else if (screenHeight < 1080) {
-    horizontalPadding = 100;
-    verticalPadding = 300;
-    maxSize = 80;
+    verticalPadding = isWide ? 200 : 320;
+    maxSize = 100;
   } else {
-    horizontalPadding = 120;
-    verticalPadding = 350;
-    maxSize = 90;
+    verticalPadding = isWide ? 220 : 360;
+    maxSize = 110;
   }
-  
-  const maxWidth = screenWidth - horizontalPadding;
-  const widthBasedSize = Math.floor(maxWidth / COLS);
-  
-  const maxHeight = screenHeight - verticalPadding;
-  const heightBasedSize = Math.floor(maxHeight / ROWS);
-  
+
+  const heightBasedSize = Math.floor((screenHeight - verticalPadding) / ROWS);
   const size = Math.min(widthBasedSize, heightBasedSize);
-  const finalSize = Math.max(60, Math.min(size, maxSize));
-  
-  
-  return finalSize;
+  return Math.max(64, Math.min(size, maxSize));
 };
 
 const useTileSize = () => {
@@ -46,168 +72,25 @@ const useTileSize = () => {
 
   useEffect(() => {
     const handleResize = () => {
-      const newSize = calculateTileSize(window.innerWidth, window.innerHeight);
-      setTileSize(newSize);
+      setTileSize(calculateTileSize(window.innerWidth, window.innerHeight));
     };
 
-    // Calculate immediately on mount (client-side only)
     handleResize();
-
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   return tileSize;
-}; 
-
-const IMG_LIST = [
-  {
-    id: 1,
-    name: "Facade for a Church with a Sculpture Representing Faith",
-    description: "French, 1739 - 1794",
-    src: "/images/1.jpg",
-  },
-  {
-    id: 2,
-    name: "René de Gas by Edgar Degas",
-    description: "French, 1834 - 1917",
-    src: "/images/2.jpg",
-  },
-  {
-    id: 3,
-    name: "Park by Paul Klee",
-    description: "Swiss, 1879 - 1940",
-    src: "/images/3.jpg",
-  },
-  {
-    id: 4,
-    name: "Flowers in a Rococo Vase",
-    description: "French, 1839 - 1906",
-    src: "/images/4.jpg",
-  },
-  {
-    id: 5,
-    name: "Antony Valabrègue",
-    description: "French, 1839 - 1906",
-    src: "/images/5.jpg",
-  },
-  {
-    id: 6,
-    name: "The Gardener Vallier",
-    description: "French, 1839 - 1906",
-    src: "/images/6.jpg",
-  },
-  {
-    id: 7,
-    name: "Boudoir by Perkins Harnly",
-    description: "American, 1901 - 1986",
-    src: "/images/7.jpg",
-  },
-  {
-    id: 8,
-    name: "Flowers in a Crystal Vase",
-    description: "French, 1832 - 1883",
-    src: "/images/8.jpg",
-  },
-  {
-    id: 9,
-    name: "A King Charles Spaniel",
-    description: "French, 1832 - 1883",
-    src: "/images/9.jpg",
-  },
-  {
-    id: 10,
-    name: "Jerusalem Artichoke Flowers",
-    description: "French, 1840 - 1926",
-    src: "/images/10.jpg",
-  },
-];
-
-const IMAGE_COLS = 3;
-const IMAGE_ROWS = 5; 
-
-const EMPTY = 0;
-const BLOCKED = -1;
-
-const BLOCKED_POSITIONS = [1, 2];
-
-const PLAYABLE_POSITIONS = Array.from({ length: TOTAL_POSITIONS }, (_, i) => i)
-  .filter(i => !BLOCKED_POSITIONS.includes(i));
-
-const SOLVED_STATE: number[] = [
-  EMPTY, BLOCKED, BLOCKED, // Row 1: Position 0, 1, 2
-  1, 2, 3,                 // Row 2
-  4, 5, 6,                 // Row 3
-  7, 8, 9,                 // Row 4
-  10, 11, 12,              // Row 5
-  13, 14, 15               // Row 6
-];
-
-const getPlayableTiles = (state: number[]): number[] => {
-  return PLAYABLE_POSITIONS.map(pos => state[pos]);
 };
 
-const getValidMoves = (state: number[], emptyPos: number): number[] => {
-  const moves: number[] = [];
-  const row = Math.floor(emptyPos / COLS);
-  const col = emptyPos % COLS;
-  
-  // Check all 4 directions
-  const directions = [
-    { dr: -1, dc: 0 }, // up
-    { dr: 1, dc: 0 },  // down
-    { dr: 0, dc: -1 }, // left
-    { dr: 0, dc: 1 },  // right
-  ];
-  
-  for (const { dr, dc } of directions) {
-    const newRow = row + dr;
-    const newCol = col + dc;
-    
-    if (newRow >= 0 && newRow < ROWS && newCol >= 0 && newCol < COLS) {
-      const newPos = newRow * COLS + newCol;
-      if (!BLOCKED_POSITIONS.includes(newPos)) {
-        moves.push(newPos);
-      }
-    }
-  }
-  
-  return moves;
-};
-
-const shuffleTiles = (): number[] => {
-  let state: number[];
-  let attempts = 0;
-  const maxAttempts = 1000;
-  
-  do {
-    state = [...SOLVED_STATE];
-    const numMoves = 100 + Math.floor(Math.random() * 200); 
-    
-    for (let i = 0; i < numMoves; i++) {
-      const emptyPos = state.indexOf(EMPTY);
-      const validMoves = getValidMoves(state, emptyPos);
-      
-      if (validMoves.length > 0) {
-        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
-        [state[emptyPos], state[randomMove]] = [state[randomMove], state[emptyPos]];
-      }
-    }
-    
-    attempts++;
-    if (attempts >= maxAttempts) {
-      console.warn("Max shuffle attempts reached, using current state");
-      break;
-    }
-  } while (JSON.stringify(getPlayableTiles(state)) === JSON.stringify(getPlayableTiles(SOLVED_STATE)));
-  
-  return state;
-};
-
-const getTileStyle = (tileNum: number, imageSrc: string, tileSize: number): React.CSSProperties => {
+const getTileStyle = (
+  tileNum: number,
+  imageSrc: string,
+  tileSize: number,
+): React.CSSProperties => {
   const col = (tileNum - 1) % IMAGE_COLS;
   const row = Math.floor((tileNum - 1) / IMAGE_COLS);
-  
+
   return {
     backgroundImage: `url(${imageSrc})`,
     backgroundSize: `${tileSize * IMAGE_COLS}px ${tileSize * IMAGE_ROWS}px`,
@@ -215,188 +98,321 @@ const getTileStyle = (tileNum: number, imageSrc: string, tileSize: number): Reac
   };
 };
 
+const formatMoveTime = (iso: string) => {
+  return new Date(iso).toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 export default function SlidingPuzzle() {
   const tileSize = useTileSize();
-  const [tiles, setTiles] = useState<number[]>(SOLVED_STATE);
-  const [moves, setMoves] = useState(0);
-  const [isWon, setIsWon] = useState(false);
-  const [isShuffled, setIsShuffled] = useState(false);
-  const [imageData, setImageData] = useState(IMG_LIST[0]); 
+  const [puzzleState, setPuzzleState] = useState<PuzzleState | null>(null);
+  const [playerName, setPlayerName] = useState("");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasLoadError, setHasLoadError] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const [moveSound, setMoveSound] = useState<HTMLAudioElement | null>(null);
   const [winSound, setWinSound] = useState<HTMLAudioElement | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setImageData(IMG_LIST[Math.floor(Math.random() * IMG_LIST.length)]);
-    setMoveSound(new Audio('/sound/mixkit-twig-breaking-2945.wav'));
+    const savedName = localStorage.getItem(PLAYER_NAME_KEY);
+    if (savedName) {
+      setPlayerName(savedName);
+    }
+
+    setMoveSound(new Audio("/sound/mixkit-twig-breaking-2945.wav"));
     setWinSound(new Audio("/sound/mixkit-achievement-bell-600.wav"));
   }, []);
 
-  const checkWin = useCallback((currentTiles: number[]) => {
-    const current = getPlayableTiles(currentTiles);
-    const solved = getPlayableTiles(SOLVED_STATE);
-    return JSON.stringify(current) === JSON.stringify(solved);
+  useEffect(() => {
+    localStorage.setItem(PLAYER_NAME_KEY, playerName);
+  }, [playerName]);
+
+  const fetchState = useCallback(async () => {
+    try {
+      const response = await fetch("/api/state", { cache: "no-store" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to load puzzle");
+      }
+
+      setPuzzleState(data);
+      setCountdown(data.secondsUntilNextMove ?? 0);
+      setHasLoadError(false);
+    } catch {
+      setHasLoadError(true);
+    }
   }, []);
 
-  const handleTileClick = (index: number) => {
-    if (isWon || !isShuffled) return;
-    if (BLOCKED_POSITIONS.includes(index)) return;
-    if (tiles[index] === EMPTY) return;
+  useEffect(() => {
+    fetchState();
+    const interval = setInterval(fetchState, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [fetchState]);
 
-    const emptyIndex = tiles.indexOf(EMPTY);
-    const emptyRow = Math.floor(emptyIndex / COLS);
-    const emptyCol = emptyIndex % COLS;
-    const tileRow = Math.floor(index / COLS);
-    const tileCol = index % COLS;
+  useEffect(() => {
+    if (countdown <= 0) {
+      return;
+    }
 
-    const isAdjacent =
-      (Math.abs(emptyRow - tileRow) === 1 && emptyCol === tileCol) ||
-      (Math.abs(emptyCol - tileCol) === 1 && emptyRow === tileRow);
+    const timer = setInterval(() => {
+      setCountdown((current) => Math.max(0, current - 1));
+    }, 1000);
 
-    if (isAdjacent && !BLOCKED_POSITIONS.includes(emptyIndex)) {
-      const newTiles = [...tiles];
-      [newTiles[index], newTiles[emptyIndex]] = [newTiles[emptyIndex], newTiles[index]];
-      setTiles(newTiles);
-      setMoves((m) => m + 1);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [puzzleState?.moveLog.length]);
+
+  const handleTileClick = async (index: number) => {
+    if (!puzzleState || isSubmitting) {
+      return;
+    }
+
+    if (!playerName.trim()) {
+      setStatusMessage("Enter your name before making a move.");
+      return;
+    }
+
+    if (puzzleState.isWon) {
+      return;
+    }
+
+    if (countdown > 0) {
+      setStatusMessage(`Wait ${countdown}s before the next move.`);
+      return;
+    }
+
+    if (BLOCKED_POSITIONS.includes(index) || puzzleState.tiles[index] === EMPTY) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStatusMessage(null);
+
+    try {
+      const response = await fetch("/api/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: playerName.trim(), tileIndex: index }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setStatusMessage(data.error ?? "Move failed.");
+        if (typeof data.error === "string" && data.error.includes("Wait")) {
+          const match = data.error.match(/(\d+)s/);
+          if (match) {
+            setCountdown(Number(match[1]));
+          }
+        }
+        return;
+      }
+
+      setPuzzleState(data);
+      setCountdown(data.secondsUntilNextMove ?? 0);
 
       if (moveSound) {
         moveSound.currentTime = 0;
-        moveSound.play().catch(() => {
-        });
+        moveSound.play().catch(() => {});
       }
 
-      if (checkWin(newTiles)) {
-        setIsWon(true);
-        if (winSound) {
-          winSound.currentTime = 0;
-          winSound.play().catch(() => {
-          });
-        }
-        
-        setTimeout(() => {
-          setIsTransitioning(true);
-        }, 3000);
-        
-        setTimeout(() => {
-          setImageData(IMG_LIST[Math.floor(Math.random() * IMG_LIST.length)]);
-          setTiles(shuffleTiles());
-          setMoves(0);
-          setIsWon(false);
-          setIsShuffled(true);
-        }, 4000);
-        
-        setTimeout(() => {
-          setIsTransitioning(false);
-        }, 4100);
+      if (data.isWon && winSound) {
+        winSound.currentTime = 0;
+        winSound.play().catch(() => {});
       }
+    } catch {
+      setStatusMessage("Could not submit move. Try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleShuffle = () => {
-    setIsTransitioning(true);
-    
-    setTimeout(() => {
-      setTiles(shuffleTiles());
-      setMoves(0);
-      setIsWon(false);
-      setIsShuffled(true);
-    }, 500);
-    
-    setTimeout(() => {
-      setIsTransitioning(false);
-    }, 600);
-  };
+  const tiles = puzzleState?.tiles ?? [];
+  const imageData = puzzleState?.image;
+  const isWon = puzzleState?.isWon ?? false;
+  const canInteract = Boolean(playerName.trim()) && countdown === 0 && !isWon && !isSubmitting;
+  const moveLog = [...(puzzleState?.moveLog ?? [])].reverse();
+  const gridWidth = tileSize * COLS;
+  const gridHeight = tileSize * ROWS;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 md:p-6 bg-white">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-white">
       <div
         className={`
-          relative p-3 sm:p-4 md:p-5 bg-[#e6e2dc] ring-1 ring-black/15 rounded-lg
+          relative w-fit max-w-full
+          p-3 sm:p-4 md:p-5 bg-[#e6e2dc] ring-1 ring-black/15 rounded-lg
           shadow-[0_12px_28px_rgba(0,0,0,.25)]
           [box-shadow:
             inset_0_2px_0_rgba(255,255,255,.85),
             inset_0_-6px_0_rgba(0,0,0,.18),
             0_12px_28px_rgba(0,0,0,.25)
           ]
-          w-full max-w-fit
+          flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-8
         `}
       >
-        <div className={`flex justify-between items-start mb-2 sm:mb-3 md:mb-4 gap-2 sm:gap-3 transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
-          <div className="flex-1 min-w-0">
-            <h2
-              className="text-sm sm:text-base md:text-lg font-semibold text-stone-700 leading-tight mb-0.5 sm:mb-1"
-              style={{ maxWidth: tileSize * 2.2 }}
-            >
-              {imageData.name}
-            </h2>
-            <span className="text-[10px] sm:text-xs md:text-sm text-stone-500 leading-tight block">
-              {imageData.description}
-            </span>
-          </div>
-          <div className="shrink-0">
-            <div
-              className="border border-stone-300"
-              style={{
-                width: tileSize * 0.65,
-                height: tileSize * 1.1,
-                backgroundImage: `url(${imageData.src})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
-            />
-          </div>
-        </div>
-
-        <div className={`relative transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
-          <div className="grid grid-cols-3 gap-0">
-            {tiles.map((tile, index) => {
-              const isBlocked = BLOCKED_POSITIONS.includes(index);
-              const isEmpty = tile === EMPTY;
-
-              if (isBlocked) {
-                return (
+        {/* Puzzle */}
+        <div className="shrink-0 w-fit max-w-full">
+          {hasLoadError ? (
+            <div className="p-8 text-center text-sm text-stone-600">
+              <p>Something went wrong.</p>
+              <p className="mt-1">Try again later.</p>
+            </div>
+          ) : !imageData ? (
+            <div className="p-8 text-center text-sm text-stone-600">Loading shared puzzle...</div>
+          ) : (
+            <>
+              <div
+                className="flex justify-between items-start mb-2 sm:mb-3 md:mb-4 gap-2 sm:gap-3"
+                style={{ width: gridWidth }}
+              >
+                <div className="flex-1 min-w-0">
+                  <h2
+                    className="text-sm sm:text-base md:text-lg font-semibold text-stone-700 leading-tight mb-0.5 sm:mb-1"
+                    style={{ maxWidth: tileSize * 2.2 }}
+                  >
+                    {imageData.name}
+                  </h2>
+                  <span className="text-[10px] sm:text-xs md:text-sm text-stone-500 leading-tight block">
+                    {imageData.description}
+                  </span>
+                </div>
+                <div className="shrink-0">
                   <div
-                    key={index}
-                    className="bg-[#e6e2dc] "
-                    style={{ width: tileSize, height: tileSize }}
+                    className="border border-stone-300"
+                    style={{
+                      width: tileSize * 0.65,
+                      height: tileSize * 1.1,
+                      backgroundImage: `url(${imageData.src})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }}
                   />
-                );
-              }
+                </div>
+              </div>
 
-              return (
-                <div
-                  key={index}
-                  onClick={() => !isEmpty && !isWon && handleTileClick(index)}
-                  className={`
-                    ${
-                      isEmpty
-                        ? "bg-stone-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3),inset_0_-2px_4px_rgba(0,0,0,0.3),inset_2px_0_4px_rgba(0,0,0,0.3),inset_-2px_0_4px_rgba(0,0,0,0.3)]"
-                        : "cursor-pointer shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_-2px_4px_rgba(0,0,0,0.2),inset_2px_0_4px_rgba(0,0,0,0.2),inset_-2px_0_4px_rgba(0,0,0,0.2)]"
+              <div className="relative" style={{ width: gridWidth, height: gridHeight }}>
+                {isWon && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-stone-900/40 rounded">
+                    <p className="text-white font-semibold text-sm sm:text-base px-4 text-center">
+                      Puzzle solved! New round starting soon...
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-0">
+                  {tiles.map((tile, index) => {
+                    const isBlocked = BLOCKED_POSITIONS.includes(index);
+                    const isEmpty = tile === EMPTY;
+
+                    if (isBlocked) {
+                      return (
+                        <div
+                          key={index}
+                          className="bg-[#e6e2dc]"
+                          style={{ width: tileSize, height: tileSize }}
+                        />
+                      );
                     }
-                  `}
-                  style={{
-                    width: tileSize,
-                    height: tileSize,
-                    ...(!isEmpty
-                      ? getTileStyle(tile, imageData.src, tileSize)
-                      : {}),
-                  }}
-                />
-              );
-            })}
-          </div>
+
+                    return (
+                      <div
+                        key={index}
+                        onClick={() => canInteract && !isEmpty && handleTileClick(index)}
+                        className={`
+                          ${
+                            isEmpty
+                              ? "bg-stone-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3),inset_0_-2px_4px_rgba(0,0,0,0.3),inset_2px_0_4px_rgba(0,0,0,0.3),inset_-2px_0_4px_rgba(0,0,0,0.3)]"
+                              : canInteract
+                                ? "cursor-pointer shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_-2px_4px_rgba(0,0,0,0.2),inset_2px_0_4px_rgba(0,0,0,0.2),inset_-2px_0_4px_rgba(0,0,0,0.2)]"
+                                : "opacity-80 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),inset_0_-2px_4px_rgba(0,0,0,0.2),inset_2px_0_4px_rgba(0,0,0,0.2),inset_-2px_0_4px_rgba(0,0,0,0.2)]"
+                          }
+                        `}
+                        style={{
+                          width: tileSize,
+                          height: tileSize,
+                          ...(!isEmpty ? getTileStyle(tile, imageData.src, tileSize) : {}),
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              <p
+                className="text-[10px] sm:text-xs text-stone-500 mt-2 sm:mt-3 text-center"
+                style={{ width: gridWidth }}
+              >
+                # Move Today: {puzzleState?.movesToday ?? 0}
+              </p>
+            </>
+          )}
         </div>
 
-        {!isShuffled && (
-          <div className="absolute inset-0 flex items-center justify-center bg-stone-200/50 rounded-lg">
-            <button
-              onClick={handleShuffle}
-              className="rounded-md px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm font-medium text-white bg-stone-700 hover:bg-stone-800 transition-all"
-            >
-              Start
-            </button>
+        {/* Chat */}
+        <div
+          className="w-full lg:w-[280px] shrink-0 flex flex-col border-t border-stone-400/25 pt-5 lg:pt-0 lg:border-t-0 lg:border-l lg:border-stone-400/25 lg:pl-6"
+          style={{ minHeight: gridHeight }}
+        >
+          <div className="mb-2">
+            <h3 className="text-sm sm:text-base font-semibold text-stone-700">Move log</h3>
           </div>
-        )}
+
+          <div className="flex-1 overflow-y-auto space-y-2 min-h-[120px] lg:min-h-0 mb-3">
+            {moveLog.length === 0 ? (
+              <p className="text-sm text-stone-500">No moves yet. Be the first!</p>
+            ) : (
+              moveLog.map((entry) => (
+                <div key={entry.id} className="text-sm">
+                  <span className="font-medium text-stone-800">{entry.playerName}</span>
+                  <span className="text-stone-600"> moved tile {entry.tileNumber}</span>
+                  <span className="block text-[11px] text-stone-400">
+                    {formatMoveTime(entry.createdAt)}
+                  </span>
+                </div>
+              ))
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          <div className="space-y-2 border-t border-stone-400/30 pt-3 mt-auto">
+            <label htmlFor="player-name" className="block text-xs sm:text-sm text-stone-600">
+              Your name (required to move)
+            </label>
+            <input
+              id="player-name"
+              type="text"
+              maxLength={30}
+              value={playerName}
+              onChange={(event) => setPlayerName(event.target.value)}
+              placeholder="Enter your name"
+              className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none focus:border-stone-500"
+            />
+            <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
+              {countdown > 0 ? (
+                <span className="text-amber-700">Next move in {countdown}s</span>
+              ) : isWon ? (
+                <span className="text-green-700">Round complete</span>
+              ) : (
+                <span className="text-stone-600">You can move now</span>
+              )}
+              {isSubmitting && <span className="text-stone-500">Submitting...</span>}
+            </div>
+            {statusMessage && (
+              <p className="text-xs sm:text-sm text-red-600">{statusMessage}</p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
